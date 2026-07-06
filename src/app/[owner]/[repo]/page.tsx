@@ -678,7 +678,7 @@ Remember:
         setLoadingMessage(undefined); // Clear specific loading message
       }
     });
-  }, [generatedPages, currentToken, effectiveRepoInfo, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, language, activeContentRequests, generateFileUrl]);
+  }, [generatedPages, currentToken, effectiveRepoInfo, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, modelIncludedDirs, modelIncludedFiles, language, activeContentRequests, generateFileUrl]);
 
   // Determine the wiki structure from repository data
   const determineWikiStructure = useCallback(async (fileTree: string, readme: string, owner: string, repo: string) => {
@@ -1161,7 +1161,7 @@ IMPORTANT:
     } finally {
       setStructureRequestInProgress(false);
     }
-  }, [generatePageContent, currentToken, effectiveRepoInfo, pagesInProgress.size, structureRequestInProgress, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, language, messages.loading, isComprehensiveView]);
+  }, [generatePageContent, currentToken, effectiveRepoInfo, pagesInProgress.size, structureRequestInProgress, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, modelIncludedDirs, modelIncludedFiles, language, messages.loading, isComprehensiveView]);
 
   // Fetch repository structure using GitHub or GitLab API
   const fetchRepositoryStructure = useCallback(async () => {
@@ -1192,7 +1192,21 @@ IMPORTANT:
 
       if (effectiveRepoInfo.type === 'local' && effectiveRepoInfo.localPath) {
         try {
-          const response = await fetch(`/local_repo/structure?path=${encodeURIComponent(effectiveRepoInfo.localPath)}`);
+          const params = new URLSearchParams({ path: effectiveRepoInfo.localPath });
+          if (modelExcludedDirs) {
+            params.append('excluded_dirs', modelExcludedDirs);
+          }
+          if (modelExcludedFiles) {
+            params.append('excluded_files', modelExcludedFiles);
+          }
+          if (modelIncludedDirs) {
+            params.append('included_dirs', modelIncludedDirs);
+          }
+          if (modelIncludedFiles) {
+            params.append('included_files', modelIncludedFiles);
+          }
+
+          const response = await fetch(`/local_repo/structure?${params.toString()}`);
 
           if (!response.ok) {
             const errorData = await response.text();
@@ -1492,7 +1506,7 @@ IMPORTANT:
       // Reset the request in progress flag
       setRequestInProgress(false);
     }
-  }, [owner, repo, determineWikiStructure, currentToken, effectiveRepoInfo, requestInProgress, messages.loading]);
+  }, [owner, repo, determineWikiStructure, currentToken, effectiveRepoInfo, requestInProgress, messages.loading, modelExcludedDirs, modelExcludedFiles, modelIncludedDirs, modelIncludedFiles]);
 
   // Function to export wiki content
   const exportWiki = useCallback(async (format: 'markdown' | 'json') => {
@@ -1598,6 +1612,12 @@ IMPORTANT:
       if (modelExcludedFiles) {
         params.append('excluded_files', modelExcludedFiles);
       }
+      if (modelIncludedDirs) {
+        params.append('included_dirs', modelIncludedDirs);
+      }
+      if (modelIncludedFiles) {
+        params.append('included_files', modelIncludedFiles);
+      }
 
       if(authRequired && !authCode) {
         setIsLoading(false);
@@ -1684,7 +1704,7 @@ IMPORTANT:
     // For now, we rely on the standard loadData flow initiated by resetting effectRan and dependencies.
     // This will re-trigger the main data loading useEffect.
     // No direct call to fetchRepositoryStructure here, let the useEffect handle it based on effectRan.current = false.
-  }, [effectiveRepoInfo, language, messages.loading, activeContentRequests, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, isComprehensiveView, authCode, authRequired]);
+  }, [effectiveRepoInfo, language, messages.loading, activeContentRequests, selectedProviderState, selectedModelState, isCustomSelectedModelState, customSelectedModelState, modelExcludedDirs, modelExcludedFiles, modelIncludedDirs, modelIncludedFiles, isComprehensiveView, authCode, authRequired]);
 
   // Start wiki generation when component mounts
   useEffect(() => {
@@ -1702,6 +1722,18 @@ IMPORTANT:
             language: language,
             comprehensive: isComprehensiveView.toString(),
           });
+          if (modelExcludedDirs) {
+            params.append('excluded_dirs', modelExcludedDirs);
+          }
+          if (modelExcludedFiles) {
+            params.append('excluded_files', modelExcludedFiles);
+          }
+          if (modelIncludedDirs) {
+            params.append('included_dirs', modelIncludedDirs);
+          }
+          if (modelIncludedFiles) {
+            params.append('included_files', modelIncludedFiles);
+          }
           const response = await fetch(`/api/wiki_cache?${params.toString()}`);
 
           if (response.ok) {
@@ -1873,7 +1905,7 @@ IMPORTANT:
 
     // Clean up function for this effect is not strictly necessary for loadData,
     // but keeping the main unmount cleanup in the other useEffect
-  }, [effectiveRepoInfo, effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, language, fetchRepositoryStructure, messages.loading?.fetchingCache, isComprehensiveView]);
+  }, [effectiveRepoInfo, effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, language, fetchRepositoryStructure, messages.loading?.fetchingCache, isComprehensiveView, modelExcludedDirs, modelExcludedFiles, modelIncludedDirs, modelIncludedFiles]);
 
   // Save wiki to server-side cache when generation is complete
   useEffect(() => {
@@ -1905,7 +1937,13 @@ IMPORTANT:
               wiki_structure: structureToCache,
               generated_pages: generatedPages,
               provider: selectedProviderState,
-              model: selectedModelState
+              model: selectedModelState,
+              file_filters: {
+                excluded_dirs: modelExcludedDirs || null,
+                excluded_files: modelExcludedFiles || null,
+                included_dirs: modelIncludedDirs || null,
+                included_files: modelIncludedFiles || null,
+              }
             };
             const response = await fetch(`/api/wiki_cache`, {
               method: 'POST',
@@ -1928,7 +1966,7 @@ IMPORTANT:
     };
 
     saveCache();
-  }, [isLoading, error, wikiStructure, generatedPages, effectiveRepoInfo.owner, effectiveRepoInfo.repo, effectiveRepoInfo.type, effectiveRepoInfo.repoUrl, repoUrl, language, isComprehensiveView]);
+  }, [isLoading, error, wikiStructure, generatedPages, effectiveRepoInfo, language, isComprehensiveView, selectedProviderState, selectedModelState, modelExcludedDirs, modelExcludedFiles, modelIncludedDirs, modelIncludedFiles]);
 
   const handlePageSelect = (pageId: string) => {
     if (currentPageId != pageId) {

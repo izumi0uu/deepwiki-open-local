@@ -191,9 +191,9 @@ for chunk in response.iter_content(chunk_size=None):
 
 ## 💾 Storage
 
-All data is stored locally on your machine:
-- Cloned repositories: `~/.adalflow/repos/`
-- Embeddings and indexes: `~/.adalflow/databases/`
-- Generated wiki cache: `~/.adalflow/wikicache/`
+All data is stored locally in the project data directory (`.deepwiki-data/` by default, or `DEEPWIKI_DATA_DIR` if set):
+- Cloned repositories: `.deepwiki-data/repos/`
+- Embeddings and indexes: `.deepwiki-data/databases/`
+- Generated wiki cache: `.deepwiki-data/wikicache/`
 
 No cloud storage is used - everything runs on your computer!

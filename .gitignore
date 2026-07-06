@@ -10,6 +10,9 @@
 !.yarn/releases
 !.yarn/versions
 
+# DeepWiki local data
+.deepwiki-data/
+
 # Python
 __pycache__/
 *.py[cod]
