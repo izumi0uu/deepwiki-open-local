@@ -12,6 +12,18 @@ import asyncio
 
 # Configure logging
 from api.logging_config import setup_logging
+from api.local_repo_filters import (
+    build_repo_filter,
+    file_is_within_size_limit,
+    filter_cache_suffix,
+    is_binary_file,
+    load_gitignore_rules,
+    resolve_local_repo_path,
+    should_descend_dir,
+    should_include_path,
+)
+
+from api.storage import get_adalflow_default_root_path
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -31,10 +43,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
-
-# Helper function to get adalflow root path
-def get_adalflow_default_root_path():
-    return os.path.expanduser(os.path.join("~", ".adalflow"))
 
 # --- Pydantic Models ---
 class WikiPage(BaseModel):
@@ -56,6 +64,8 @@ class ProcessedProjectEntry(BaseModel):
     repo_type: str # Renamed from type to repo_type for clarity with existing models
     submittedAt: int # Timestamp
     language: str # Extracted from filename
+    variant: Optional[str] = None
+    comprehensive: Optional[bool] = None
 
 class RepoInfo(BaseModel):
     owner: str
@@ -64,6 +74,13 @@ class RepoInfo(BaseModel):
     token: Optional[str] = None
     localPath: Optional[str] = None
     repoUrl: Optional[str] = None
+
+
+class FileFilterInfo(BaseModel):
+    excluded_dirs: Optional[str] = None
+    excluded_files: Optional[str] = None
+    included_dirs: Optional[str] = None
+    included_files: Optional[str] = None
 
 
 class WikiSection(BaseModel):
@@ -97,6 +114,7 @@ class WikiCacheData(BaseModel):
     repo: Optional[RepoInfo] = None
     provider: Optional[str] = None
     model: Optional[str] = None
+    comprehensive: Optional[bool] = None
 
 class WikiCacheRequest(BaseModel):
     """
@@ -104,10 +122,12 @@ class WikiCacheRequest(BaseModel):
     """
     repo: RepoInfo
     language: str
+    comprehensive: bool = True
     wiki_structure: WikiStructureModel
     generated_pages: Dict[str, WikiPage]
     provider: str
     model: str
+    file_filters: Optional[FileFilterInfo] = None
 
 class WikiExportRequest(BaseModel):
     """
@@ -273,7 +293,13 @@ async def export_wiki(request: WikiExportRequest):
         raise HTTPException(status_code=500, detail=error_msg)
 
 @app.get("/local_repo/structure")
-async def get_local_repo_structure(path: str = Query(None, description="Path to local repository")):
+async def get_local_repo_structure(
+    path: str = Query(None, description="Path to local repository"),
+    excluded_dirs: Optional[str] = Query(None, description="Newline or comma separated directory patterns to exclude"),
+    excluded_files: Optional[str] = Query(None, description="Newline or comma separated file patterns to exclude"),
+    included_dirs: Optional[str] = Query(None, description="Newline or comma separated directory patterns to include exclusively"),
+    included_files: Optional[str] = Query(None, description="Newline or comma separated file patterns to include exclusively"),
+):
     """Return the file tree and README content for a local repository."""
     if not path:
         return JSONResponse(
@@ -281,37 +307,68 @@ async def get_local_repo_structure(path: str = Query(None, description="Path to 
             content={"error": "No path provided. Please provide a 'path' query parameter."}
         )
 
-    if not os.path.isdir(path):
+    try:
+        resolved_path = resolve_local_repo_path(path)
+    except FileNotFoundError:
         return JSONResponse(
             status_code=404,
             content={"error": f"Directory not found: {path}"}
         )
+    except PermissionError as e:
+        return JSONResponse(
+            status_code=403,
+            content={"error": str(e)}
+        )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)}
+        )
 
     try:
-        logger.info(f"Processing local repository at: {path}")
+        logger.info(f"Processing local repository at: {resolved_path}")
+        repo_filter = build_repo_filter(
+            excluded_dirs=excluded_dirs,
+            excluded_files=excluded_files,
+            included_dirs=included_dirs,
+            included_files=included_files,
+        )
+        gitignore_rules = load_gitignore_rules(resolved_path)
         file_tree_lines = []
         readme_content = ""
 
-        for root, dirs, files in os.walk(path):
-            # Exclude hidden dirs/files and virtual envs
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__' and d != 'node_modules' and d != '.venv']
+        for root, dirs, files in os.walk(resolved_path):
+            rel_dir = os.path.relpath(root, resolved_path)
+            dirs[:] = [
+                directory
+                for directory in dirs
+                if should_descend_dir(
+                    os.path.join(rel_dir, directory) if rel_dir != "." else directory,
+                    repo_filter,
+                    gitignore_rules,
+                )
+            ]
+
             for file in files:
-                if file.startswith('.') or file == '__init__.py' or file == '.DS_Store':
+                rel_file = os.path.join(rel_dir, file) if rel_dir != "." else file
+                full_path = os.path.join(root, file)
+
+                if not should_include_path(rel_file, repo_filter, gitignore_rules):
                     continue
-                rel_dir = os.path.relpath(root, path)
-                rel_file = os.path.join(rel_dir, file) if rel_dir != '.' else file
+                if not file_is_within_size_limit(full_path) or is_binary_file(full_path):
+                    continue
+
                 file_tree_lines.append(rel_file)
-                # Find README.md (case-insensitive)
-                if file.lower() == 'readme.md' and not readme_content:
+                if file.lower() in {"readme.md", "readme.rst", "readme.txt"} and not readme_content:
                     try:
-                        with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
+                        with open(full_path, 'r', encoding='utf-8') as f:
                             readme_content = f.read()
                     except Exception as e:
-                        logger.warning(f"Could not read README.md: {str(e)}")
+                        logger.warning(f"Could not read README file {rel_file}: {str(e)}")
                         readme_content = ""
 
         file_tree_str = '\n'.join(sorted(file_tree_lines))
-        return {"file_tree": file_tree_str, "readme": readme_content}
+        return {"file_tree": file_tree_str, "readme": readme_content, "root": resolved_path}
     except Exception as e:
         logger.error(f"Error processing local repository: {str(e)}")
         return JSONResponse(
@@ -405,27 +462,133 @@ app.add_websocket_route("/ws/chat", handle_websocket_chat)
 WIKI_CACHE_DIR = os.path.join(get_adalflow_default_root_path(), "wikicache")
 os.makedirs(WIKI_CACHE_DIR, exist_ok=True)
 
-def get_wiki_cache_path(owner: str, repo: str, repo_type: str, language: str) -> str:
+def _cache_variant_suffix(
+    excluded_dirs: Optional[str] = None,
+    excluded_files: Optional[str] = None,
+    included_dirs: Optional[str] = None,
+    included_files: Optional[str] = None,
+    comprehensive: Optional[bool] = None,
+) -> str:
+    suffix = filter_cache_suffix(
+        excluded_dirs=excluded_dirs,
+        excluded_files=excluded_files,
+        included_dirs=included_dirs,
+        included_files=included_files,
+    )
+    parts = []
+    if comprehensive is not None:
+        parts.append("comprehensive" if comprehensive else "concise")
+    if suffix:
+        parts.append(suffix)
+    return f"_{'_'.join(parts)}" if parts else ""
+
+
+def get_wiki_cache_path(
+    owner: str,
+    repo: str,
+    repo_type: str,
+    language: str,
+    excluded_dirs: Optional[str] = None,
+    excluded_files: Optional[str] = None,
+    included_dirs: Optional[str] = None,
+    included_files: Optional[str] = None,
+    comprehensive: Optional[bool] = None,
+) -> str:
     """Generates the file path for a given wiki cache."""
-    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}.json"
+    variant = _cache_variant_suffix(excluded_dirs, excluded_files, included_dirs, included_files, comprehensive)
+    filename = f"deepwiki_cache_{repo_type}_{owner}_{repo}_{language}{variant}.json"
     return os.path.join(WIKI_CACHE_DIR, filename)
 
-async def read_wiki_cache(owner: str, repo: str, repo_type: str, language: str) -> Optional[WikiCacheData]:
+
+def _resolve_cache_id_path(cache_id: str) -> str:
+    if not cache_id or os.path.basename(cache_id) != cache_id:
+        raise ValueError("Invalid cache id")
+    if not cache_id.startswith("deepwiki_cache_") or not cache_id.endswith(".json"):
+        raise ValueError("Invalid cache id")
+    cache_path = os.path.realpath(os.path.join(WIKI_CACHE_DIR, cache_id))
+    if os.path.commonpath([cache_path, os.path.realpath(WIKI_CACHE_DIR)]) != os.path.realpath(WIKI_CACHE_DIR):
+        raise ValueError("Invalid cache id")
+    return cache_path
+
+
+def _parse_wiki_cache_filename(filename: str) -> Optional[Dict[str, Any]]:
+    if not filename.startswith("deepwiki_cache_") or not filename.endswith(".json"):
+        return None
+
+    stem = filename[len("deepwiki_cache_"):-len(".json")]
+    parts = stem.split("_")
+    if len(parts) < 4:
+        return None
+
+    supported_languages = set(configs.get("lang_config", {}).get("supported_languages", []))
+    language_index = None
+    for index in range(len(parts) - 1, 1, -1):
+        if parts[index] in supported_languages:
+            language_index = index
+            break
+    if language_index is None:
+        language_index = len(parts) - 1
+
+    if language_index <= 2:
+        return None
+
+    variant_parts = parts[language_index + 1:]
+    comprehensive = None
+    if "comprehensive" in variant_parts:
+        comprehensive = True
+    elif "concise" in variant_parts:
+        comprehensive = False
+
+    return {
+        "repo_type": parts[0],
+        "owner": parts[1],
+        "repo": "_".join(parts[2:language_index]),
+        "language": parts[language_index],
+        "variant": "_".join(variant_parts) or None,
+        "comprehensive": comprehensive,
+    }
+
+
+def read_wiki_cache_file(cache_path: str) -> Optional[WikiCacheData]:
+    try:
+        with open(cache_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return WikiCacheData(**data)
+    except Exception as e:
+        logger.error(f"Error reading wiki cache from {cache_path}: {e}")
+        return None
+
+async def read_wiki_cache(
+    owner: str,
+    repo: str,
+    repo_type: str,
+    language: str,
+    excluded_dirs: Optional[str] = None,
+    excluded_files: Optional[str] = None,
+    included_dirs: Optional[str] = None,
+    included_files: Optional[str] = None,
+    comprehensive: Optional[bool] = None,
+) -> Optional[WikiCacheData]:
     """Reads wiki cache data from the file system."""
-    cache_path = get_wiki_cache_path(owner, repo, repo_type, language)
+    cache_path = get_wiki_cache_path(owner, repo, repo_type, language, excluded_dirs, excluded_files, included_dirs, included_files, comprehensive)
     if os.path.exists(cache_path):
-        try:
-            with open(cache_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return WikiCacheData(**data)
-        except Exception as e:
-            logger.error(f"Error reading wiki cache from {cache_path}: {e}")
-            return None
+        return await asyncio.to_thread(read_wiki_cache_file, cache_path)
     return None
 
 async def save_wiki_cache(data: WikiCacheRequest) -> bool:
     """Saves wiki cache data to the file system."""
-    cache_path = get_wiki_cache_path(data.repo.owner, data.repo.repo, data.repo.type, data.language)
+    filters = data.file_filters or FileFilterInfo()
+    cache_path = get_wiki_cache_path(
+        data.repo.owner,
+        data.repo.repo,
+        data.repo.type,
+        data.language,
+        filters.excluded_dirs,
+        filters.excluded_files,
+        filters.included_dirs,
+        filters.included_files,
+        data.comprehensive,
+    )
     logger.info(f"Attempting to save wiki cache. Path: {cache_path}")
     try:
         payload = WikiCacheData(
@@ -433,7 +596,8 @@ async def save_wiki_cache(data: WikiCacheRequest) -> bool:
             generated_pages=data.generated_pages,
             repo=data.repo,
             provider=data.provider,
-            model=data.model
+            model=data.model,
+            comprehensive=data.comprehensive,
         )
         # Log size of data to be cached for debugging (avoid logging full content if large)
         try:
@@ -463,7 +627,12 @@ async def get_cached_wiki(
     owner: str = Query(..., description="Repository owner"),
     repo: str = Query(..., description="Repository name"),
     repo_type: str = Query(..., description="Repository type (e.g., github, gitlab)"),
-    language: str = Query(..., description="Language of the wiki content")
+    language: str = Query(..., description="Language of the wiki content"),
+    excluded_dirs: Optional[str] = Query(None, description="Directory filters used to build the wiki"),
+    excluded_files: Optional[str] = Query(None, description="File filters used to build the wiki"),
+    included_dirs: Optional[str] = Query(None, description="Included directory filters used to build the wiki"),
+    included_files: Optional[str] = Query(None, description="Included file filters used to build the wiki"),
+    comprehensive: Optional[bool] = Query(None, description="Whether the wiki was generated in comprehensive mode")
 ):
     """
     Retrieves cached wiki data (structure and generated pages) for a repository.
@@ -474,7 +643,7 @@ async def get_cached_wiki(
         language = configs["lang_config"]["default"]
 
     logger.info(f"Attempting to retrieve wiki cache for {owner}/{repo} ({repo_type}), lang: {language}")
-    cached_data = await read_wiki_cache(owner, repo, repo_type, language)
+    cached_data = await read_wiki_cache(owner, repo, repo_type, language, excluded_dirs, excluded_files, included_dirs, included_files, comprehensive)
     if cached_data:
         return cached_data
     else:
@@ -507,6 +676,11 @@ async def delete_wiki_cache(
     repo: str = Query(..., description="Repository name"),
     repo_type: str = Query(..., description="Repository type (e.g., github, gitlab)"),
     language: str = Query(..., description="Language of the wiki content"),
+    excluded_dirs: Optional[str] = Query(None, description="Directory filters used to build the wiki"),
+    excluded_files: Optional[str] = Query(None, description="File filters used to build the wiki"),
+    included_dirs: Optional[str] = Query(None, description="Included directory filters used to build the wiki"),
+    included_files: Optional[str] = Query(None, description="Included file filters used to build the wiki"),
+    comprehensive: Optional[bool] = Query(None, description="Whether the wiki was generated in comprehensive mode"),
     authorization_code: Optional[str] = Query(None, description="Authorization code")
 ):
     """
@@ -523,7 +697,7 @@ async def delete_wiki_cache(
             raise HTTPException(status_code=401, detail="Authorization code is invalid")
 
     logger.info(f"Attempting to delete wiki cache for {owner}/{repo} ({repo_type}), lang: {language}")
-    cache_path = get_wiki_cache_path(owner, repo, repo_type, language)
+    cache_path = get_wiki_cache_path(owner, repo, repo_type, language, excluded_dirs, excluded_files, included_dirs, included_files, comprehensive)
 
     if os.path.exists(cache_path):
         try:
@@ -592,37 +766,32 @@ async def get_processed_projects():
         filenames = await asyncio.to_thread(os.listdir, WIKI_CACHE_DIR) # Use asyncio.to_thread for os.listdir
 
         for filename in filenames:
-            if filename.startswith("deepwiki_cache_") and filename.endswith(".json"):
-                file_path = os.path.join(WIKI_CACHE_DIR, filename)
-                try:
-                    stats = await asyncio.to_thread(os.stat, file_path) # Use asyncio.to_thread for os.stat
-                    parts = filename.replace("deepwiki_cache_", "").replace(".json", "").split('_')
+            parsed = _parse_wiki_cache_filename(filename)
+            if not parsed:
+                continue
 
-                    # Expecting repo_type_owner_repo_language
-                    # Example: deepwiki_cache_github_AsyncFuncAI_deepwiki-open_en.json
-                    # parts = [github, AsyncFuncAI, deepwiki-open, en]
-                    if len(parts) >= 4:
-                        repo_type = parts[0]
-                        owner = parts[1]
-                        language = parts[-1] # language is the last part
-                        repo = "_".join(parts[2:-1]) # repo can contain underscores
+            file_path = os.path.join(WIKI_CACHE_DIR, filename)
+            try:
+                stats = await asyncio.to_thread(os.stat, file_path) # Use asyncio.to_thread for os.stat
+                owner = parsed["owner"]
+                repo = parsed["repo"]
 
-                        project_entries.append(
-                            ProcessedProjectEntry(
-                                id=filename,
-                                owner=owner,
-                                repo=repo,
-                                name=f"{owner}/{repo}",
-                                repo_type=repo_type,
-                                submittedAt=int(stats.st_mtime * 1000), # Convert to milliseconds
-                                language=language
-                            )
-                        )
-                    else:
-                        logger.warning(f"Could not parse project details from filename: {filename}")
-                except Exception as e:
-                    logger.error(f"Error processing file {file_path}: {e}")
-                    continue # Skip this file on error
+                project_entries.append(
+                    ProcessedProjectEntry(
+                        id=filename,
+                        owner=owner,
+                        repo=repo,
+                        name=f"{owner}/{repo}",
+                        repo_type=parsed["repo_type"],
+                        submittedAt=int(stats.st_mtime * 1000), # Convert to milliseconds
+                        language=parsed["language"],
+                        variant=parsed["variant"],
+                        comprehensive=parsed["comprehensive"],
+                    )
+                )
+            except Exception as e:
+                logger.error(f"Error processing file {file_path}: {e}")
+                continue # Skip this file on error
 
         # Sort by most recent first
         project_entries.sort(key=lambda p: p.submittedAt, reverse=True)

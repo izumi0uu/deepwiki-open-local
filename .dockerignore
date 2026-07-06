@@ -45,6 +45,9 @@ api/*.pyc
 .env.test.local
 .env.production.local
 
+# DeepWiki local data
+.deepwiki-data/
+
 # Docker
 Dockerfile
 docker-compose.yml
