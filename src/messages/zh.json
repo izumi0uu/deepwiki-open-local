@@ -81,7 +81,17 @@
     "hideDefault": "隐藏默认配置",
     "viewDefault": "查看默认配置",
     "authorizationCode": "授权码",
-    "authorizationRequired": "生成wiki页面需要填写授权码"
+    "authorizationRequired": "生成wiki页面需要填写授权码",
+    "selectLocalFolder": "选择本地文件夹",
+    "browseLocalFolders": "浏览本地文件夹",
+    "localFolderHelp": "浏览此 DeepWiki 实例可访问的文件夹。只能选择已配置允许根目录下的文件夹。",
+    "allowedRoots": "允许的根目录",
+    "currentFolder": "当前文件夹",
+    "selectThisFolder": "选择此文件夹",
+    "noAllowedRoots": "未配置可用的本地文件夹根目录。",
+    "noSubfolders": "未找到子文件夹。",
+    "back": "返回",
+    "cancel": "取消"
   },
   "footer": {
     "copyright": "DeepWiki - 为代码仓库提供AI驱动的文档"

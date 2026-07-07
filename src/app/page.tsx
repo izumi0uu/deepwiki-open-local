@@ -7,6 +7,7 @@ import { FaWikipediaW, FaGithub, FaCoffee, FaTwitter } from 'react-icons/fa';
 import ThemeToggle from '@/components/theme-toggle';
 import Mermaid from '../components/Mermaid';
 import ConfigurationModal from '@/components/ConfigurationModal';
+import LocalFolderPickerModal from '@/components/LocalFolderPickerModal';
 import ProcessedProjects from '@/components/ProcessedProjects';
 import { extractUrlPath, extractUrlDomain } from '@/utils/urlDecoder';
 import { useProcessedProjects } from '@/hooks/useProcessedProjects';
@@ -105,14 +106,15 @@ export default function Home() {
     }
   };
 
-  const handleRepositoryInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newRepoUrl = e.target.value;
-    setRepositoryInput(newRepoUrl);
-    if (newRepoUrl.trim() === "") {
-      // Optionally reset fields if input is cleared
-    } else {
-        loadConfigFromCache(newRepoUrl);
+  const applyRepositoryInput = (value: string) => {
+    setRepositoryInput(value);
+    if (value.trim()) {
+      loadConfigFromCache(value);
     }
+  };
+
+  const handleRepositoryInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    applyRepositoryInput(e.target.value);
   };
 
   useEffect(() => {
@@ -138,6 +140,7 @@ export default function Home() {
   const [accessToken, setAccessToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string>(language);
 
   // Authentication state
@@ -431,6 +434,13 @@ export default function Home() {
                 )}
               </div>
               <button
+                type="button"
+                onClick={() => setIsFolderPickerOpen(true)}
+                className="px-4 py-2.5 rounded-lg border border-[var(--border-color)] text-sm text-[var(--foreground)] hover:border-[var(--accent-primary)] hover:bg-[var(--accent-primary)]/5 transition-colors"
+              >
+                {t('form.selectLocalFolder') || 'Select local folder'}
+              </button>
+              <button
                 type="submit"
                 className="btn-japanese px-6 py-2.5 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isSubmitting}
@@ -439,6 +449,17 @@ export default function Home() {
               </button>
             </div>
           </form>
+
+          <LocalFolderPickerModal
+            isOpen={isFolderPickerOpen}
+            onClose={() => setIsFolderPickerOpen(false)}
+            initialPath={repositoryInput}
+            onSelect={(path) => {
+              applyRepositoryInput(path);
+              setError(null);
+              setIsFolderPickerOpen(false);
+            }}
+          />
 
           {/* Configuration Modal */}
           <ConfigurationModal

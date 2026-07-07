@@ -81,7 +81,17 @@
     "hideDefault": "デフォルトを隠す",
     "viewDefault": "デフォルトを表示",
     "authorizationCode": "認証コード",
-    "authorizationRequired": "Wiki生成には認証コードが必要です"
+    "authorizationRequired": "Wiki生成には認証コードが必要です",
+    "selectLocalFolder": "Select local folder",
+    "browseLocalFolders": "Browse local folders",
+    "localFolderHelp": "Browse folders available to this DeepWiki instance. Only configured allowed roots can be selected.",
+    "allowedRoots": "Allowed roots",
+    "currentFolder": "Current folder",
+    "selectThisFolder": "Select this folder",
+    "noAllowedRoots": "No allowed local folder roots are configured.",
+    "noSubfolders": "No subfolders found.",
+    "back": "Back",
+    "cancel": "Cancel"
   },
   "footer": {
     "copyright": "DeepWiki - コードリポジトリのためのAI駆動ドキュメンテーション"

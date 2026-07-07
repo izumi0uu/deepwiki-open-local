@@ -79,7 +79,17 @@
     "changeModel": "修改模型",
     "defaultNote": "這些預設設定已經被套用。請在上方新增您的自訂排除項目。",
     "hideDefault": "隱藏預設設定",
-    "viewDefault": "檢視預設設定"
+    "viewDefault": "檢視預設設定",
+    "selectLocalFolder": "選擇本機資料夾",
+    "browseLocalFolders": "瀏覽本機資料夾",
+    "localFolderHelp": "瀏覽此 DeepWiki 實例可存取的資料夾。只能選擇已設定允許根目錄下的資料夾。",
+    "allowedRoots": "允許的根目錄",
+    "currentFolder": "目前資料夾",
+    "selectThisFolder": "選擇此資料夾",
+    "noAllowedRoots": "尚未設定可用的本機資料夾根目錄。",
+    "noSubfolders": "未找到子資料夾。",
+    "back": "返回",
+    "cancel": "取消"
   },
   "footer": {
     "copyright": "DeepWiki - 為程式碼儲存庫提供 AI 驅動的文件"
@@ -128,4 +138,4 @@
     "existingProjects": "現有專案",
     "recentProjects": "最近專案"
   }
-} 
+}

@@ -81,7 +81,17 @@
     "hideDefault": "Ocultar Predeterminados",
     "viewDefault": "Ver Predeterminados",
     "authorizationCode": "Código de Autorización",
-    "authorizationRequired": "Generar Wiki requiere código de autorización"
+    "authorizationRequired": "Generar Wiki requiere código de autorización",
+    "selectLocalFolder": "Select local folder",
+    "browseLocalFolders": "Browse local folders",
+    "localFolderHelp": "Browse folders available to this DeepWiki instance. Only configured allowed roots can be selected.",
+    "allowedRoots": "Allowed roots",
+    "currentFolder": "Current folder",
+    "selectThisFolder": "Select this folder",
+    "noAllowedRoots": "No allowed local folder roots are configured.",
+    "noSubfolders": "No subfolders found.",
+    "back": "Back",
+    "cancel": "Cancel"
   },
   "footer": {
     "copyright": "DeepWiki - Documentación impulsada por IA para repositorios de código"

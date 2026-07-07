@@ -90,7 +90,17 @@
       "excludeModeDescription": "Spécifie les chemins à exclure du traitement (comportement par défaut)",
       "includeModeDescription": "Spécifie uniquement les chemins à inclure, en ignorant les autres",
       "authorizationCode": "Code d’autorisation",
-      "authorizationRequired": "Une authentification est requise pour générer le wiki."
+      "authorizationRequired": "Une authentification est requise pour générer le wiki.",
+      "selectLocalFolder": "Select local folder",
+      "browseLocalFolders": "Browse local folders",
+      "localFolderHelp": "Browse folders available to this DeepWiki instance. Only configured allowed roots can be selected.",
+      "allowedRoots": "Allowed roots",
+      "currentFolder": "Current folder",
+      "selectThisFolder": "Select this folder",
+      "noAllowedRoots": "No allowed local folder roots are configured.",
+      "noSubfolders": "No subfolders found.",
+      "back": "Back",
+      "cancel": "Cancel"
     },
     "footer": {
       "copyright": "DeepWiki - Documentation assistée par l'IA pour les dépôts de code"
@@ -140,4 +150,4 @@
       "recentProjects": "Projets récents"
     }
   }
-  
+

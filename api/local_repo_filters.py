@@ -3,7 +3,7 @@ import hashlib
 import os
 import re
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence
 
 from api.config import DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES, configs
 
@@ -120,7 +120,7 @@ def get_allowed_local_repo_roots() -> List[str]:
             break
 
     if configured:
-        raw_roots = parse_filter_list(configured)
+        raw_roots = [root.strip() for root in _SPLIT_RE.split(configured) if root.strip()]
     else:
         raw_roots = ["~/projects", "~/work", os.getcwd()]
 
@@ -148,6 +148,89 @@ def resolve_local_repo_path(path: str) -> str:
         )
 
     return resolved
+
+
+def _root_display_name(root: str) -> str:
+    name = os.path.basename(root.rstrip(os.sep))
+    return name or root
+
+
+def get_allowed_local_repo_root_entries() -> List[Dict[str, str]]:
+    return [
+        {
+            "name": _root_display_name(root),
+            "path": root,
+        }
+        for root in get_allowed_local_repo_roots()
+    ]
+
+
+def find_local_repo_root(path: str) -> Optional[str]:
+    resolved = os.path.realpath(os.path.abspath(os.path.expanduser(path)))
+    matching_roots = [root for root in get_allowed_local_repo_roots() if _is_within_root(resolved, root)]
+    if not matching_roots:
+        return None
+    return max(matching_roots, key=len)
+
+
+def resolve_local_browse_path(path: str) -> tuple[str, str]:
+    resolved = resolve_local_repo_path(path)
+    root = find_local_repo_root(resolved)
+    if not root:
+        raise PermissionError(
+            "Local repository path is outside the allowed roots. "
+            "Set DEEPWIKI_LOCAL_REPO_ROOTS or LOCAL_REPO_ROOTS to allow it."
+        )
+    return resolved, root
+
+
+def get_local_browse_parent(path: str, root: str) -> Optional[str]:
+    parent = os.path.realpath(os.path.dirname(path))
+    if parent == path or not _is_within_root(parent, root) or parent == os.path.dirname(root):
+        return None
+    return parent if parent != path else None
+
+
+def is_repo_candidate(path: str) -> bool:
+    return os.path.isdir(os.path.join(path, ".git")) or any(
+        os.path.isfile(os.path.join(path, filename))
+        for filename in ("README.md", "README.rst", "README.txt", "package.json", "pyproject.toml")
+    )
+
+
+def list_local_browse_dirs(path: str, root: str) -> List[Dict[str, object]]:
+    entries: List[Dict[str, object]] = []
+    try:
+        names = os.listdir(path)
+    except OSError as exc:
+        raise PermissionError(f"Cannot read directory: {path}") from exc
+
+    for name in names:
+        if name.startswith("."):
+            continue
+        full_path = os.path.join(path, name)
+        resolved = os.path.realpath(full_path)
+        if not os.path.isdir(resolved) or not _is_within_root(resolved, root):
+            continue
+        entries.append(
+            {
+                "name": name,
+                "path": resolved,
+                "is_repo_candidate": is_repo_candidate(resolved),
+            }
+        )
+
+    return sorted(entries, key=lambda entry: str(entry["name"]).lower())
+
+
+def build_local_browse_response(path: str) -> Dict[str, object]:
+    resolved, root = resolve_local_browse_path(path)
+    return {
+        "current_path": resolved,
+        "parent_path": get_local_browse_parent(resolved, root),
+        "root_path": root,
+        "entries": list_local_browse_dirs(resolved, root),
+    }
 
 
 def _is_within_root(path: str, root: str) -> bool:

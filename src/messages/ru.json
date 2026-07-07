@@ -90,7 +90,17 @@
     "excludeModeDescription": "Укажите пути, которые нужно исключить из обработки (поведение по умолчанию)",
     "includeModeDescription": "Укажите только те пути, которые нужно включить, игнорируя остальные",
     "authorizationCode": "Код авторизации",
-    "authorizationRequired": "Для генерации Wiki требуется авторизация."
+    "authorizationRequired": "Для генерации Wiki требуется авторизация.",
+    "selectLocalFolder": "Select local folder",
+    "browseLocalFolders": "Browse local folders",
+    "localFolderHelp": "Browse folders available to this DeepWiki instance. Only configured allowed roots can be selected.",
+    "allowedRoots": "Allowed roots",
+    "currentFolder": "Current folder",
+    "selectThisFolder": "Select this folder",
+    "noAllowedRoots": "No allowed local folder roots are configured.",
+    "noSubfolders": "No subfolders found.",
+    "back": "Back",
+    "cancel": "Cancel"
   },
   "footer": {
     "copyright": "DeepWiki — документация с поддержкой ИИ для репозиториев кода"

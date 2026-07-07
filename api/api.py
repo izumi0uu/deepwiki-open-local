@@ -13,9 +13,11 @@ import asyncio
 # Configure logging
 from api.logging_config import setup_logging
 from api.local_repo_filters import (
+    build_local_browse_response,
     build_repo_filter,
     file_is_within_size_limit,
     filter_cache_suffix,
+    get_allowed_local_repo_root_entries,
     is_binary_file,
     load_gitignore_rules,
     resolve_local_repo_path,
@@ -292,6 +294,34 @@ async def export_wiki(request: WikiExportRequest):
         logger.error(error_msg)
         raise HTTPException(status_code=500, detail=error_msg)
 
+@app.get("/local_repo/roots")
+async def get_local_repo_roots():
+    """Return local repository roots available to this DeepWiki instance."""
+    return {"roots": get_allowed_local_repo_root_entries()}
+
+
+@app.get("/local_repo/browse")
+async def browse_local_repo(path: str = Query(..., description="Directory path to browse")):
+    """Return immediate child directories for an allowed local path."""
+    try:
+        return build_local_browse_response(path)
+    except FileNotFoundError:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Directory not found: {path}"}
+        )
+    except PermissionError as e:
+        return JSONResponse(
+            status_code=403,
+            content={"error": str(e)}
+        )
+    except ValueError as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)}
+        )
+
+
 @app.get("/local_repo/structure")
 async def get_local_repo_structure(
     path: str = Query(None, description="Path to local repository"),
@@ -455,7 +485,7 @@ from api.websocket_wiki import handle_websocket_chat
 app.add_api_route("/chat/completions/stream", chat_completions_stream, methods=["POST"])
 
 # Add the WebSocket endpoint
-app.add_websocket_route("/ws/chat", handle_websocket_chat)
+app.add_api_websocket_route("/ws/chat", handle_websocket_chat)
 
 # --- Wiki Cache Helper Functions ---
 

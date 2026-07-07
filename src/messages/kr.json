@@ -81,7 +81,17 @@
       "hideDefault": "기본값 숨기기",
       "viewDefault": "기본값 보기",
       "authorizationCode": "인증코드",
-      "authorizationRequired": "Wiki 생성에는 인증코드가 필요합니다"
+      "authorizationRequired": "Wiki 생성에는 인증코드가 필요합니다",
+      "selectLocalFolder": "Select local folder",
+      "browseLocalFolders": "Browse local folders",
+      "localFolderHelp": "Browse folders available to this DeepWiki instance. Only configured allowed roots can be selected.",
+      "allowedRoots": "Allowed roots",
+      "currentFolder": "Current folder",
+      "selectThisFolder": "Select this folder",
+      "noAllowedRoots": "No allowed local folder roots are configured.",
+      "noSubfolders": "No subfolders found.",
+      "back": "Back",
+      "cancel": "Cancel"
     },
     "footer": {
       "copyright": "DeepWiki - 코드 저장소를 위한 AI 기반 문서화"

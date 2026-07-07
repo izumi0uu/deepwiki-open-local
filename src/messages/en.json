@@ -90,7 +90,17 @@
     "excludeModeDescription": "Specify paths to exclude from processing (default behavior)",
     "includeModeDescription": "Specify only the paths to include, ignoring all others",
     "authorizationCode": "Authorization Code",
-    "authorizationRequired": "Authentication is required to generate the wiki."
+    "authorizationRequired": "Authentication is required to generate the wiki.",
+    "selectLocalFolder": "Select local folder",
+    "browseLocalFolders": "Browse local folders",
+    "localFolderHelp": "Browse folders available to this DeepWiki instance. Only configured allowed roots can be selected.",
+    "allowedRoots": "Allowed roots",
+    "currentFolder": "Current folder",
+    "selectThisFolder": "Select this folder",
+    "noAllowedRoots": "No allowed local folder roots are configured.",
+    "noSubfolders": "No subfolders found.",
+    "back": "Back",
+    "cancel": "Cancel"
   },
   "footer": {
     "copyright": "DeepWiki - AI-powered documentation for code repositories"
